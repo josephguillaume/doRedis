@@ -190,3 +190,12 @@ retrieve.foreach <- function(obj)
     getResult(it)
   }
 }
+
+progress <- function(obj){
+  ## foreach object is augmented when options.redis.async=TRUE
+  queue=obj$queue
+  ID=obj$ID
+  
+  queueResults <- sprintf("%s:%.0f.results",queue,ID) # Output values
+  redisLLen(queueResults)/(obj$nout-1)
+}
