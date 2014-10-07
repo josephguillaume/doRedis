@@ -12,7 +12,8 @@ export(
   print.doRedis_job,
   retrieve,
   retrieve.default,
-  retrieve.doRedis_job
+  retrieve.doRedis_job,
+  retrieve.foreach
 )
 import(foreach)
 import(rredis)

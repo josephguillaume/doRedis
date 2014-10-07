@@ -91,3 +91,102 @@ retrieve.doRedis_job <- function(obj,timeout=0){
     return(results[[1]])
   }
 }
+
+retrieve.foreach <- function(obj)
+{
+  ## foreach object is augmented when options.redis.async=TRUE
+  queue=obj$queue
+  ID=obj$ID
+  task_list=obj$task_list
+  nout=obj$nout
+  it=obj$stored_it
+  accumulator=obj$accumulator
+  
+  #it <- iter(obj)
+  #accumulator <- makeAccum(it)
+  
+  results <- NULL
+  
+  # We check for a fault-tolerance check interval (in seconds):
+  ftinterval <- 30
+  if(!is.null(obj$options$redis$ftinterval))
+  {
+    tryCatch(
+      ftinterval <- obj$options$redis$ftinterval,
+      error=function(e) {ftinterval <<- 30; warning(e)}
+    )
+  }
+  ftinterval <- max(ftinterval,1)
+  
+  # Collect the results and pass through the accumulator
+  queueResults <- sprintf("%s:%.0f.results",queue,ID) # Output values
+  finished = c()
+  j <- 1
+  while(j < nout)
+  {
+    results <- tryCatch(redisBRPop(queueResults, timeout=ftinterval),error=NULL)
+    if(is.null(results))
+    {
+      # Check for worker fault and re-submit tasks if required...
+      queueStart <- sprintf("%s:%.0f.start*",queue,ID)
+      queueAlive <- sprintf("%s:%.0f.alive*",queue,ID)
+      redisMulti()
+      redisKeys(queueStart)
+      redisKeys(queueAlive)
+      redisLLen(queue)    # number of queued tasks remaining
+      ans <- redisExec()
+      started <- ans[[1]]
+      alive <- ans[[2]]
+      queued <- ans[[3]]
+      
+      started <- gsub(sprintf("%s:%.0f.start.",queue,ID),"",started)
+      alive <- gsub(sprintf("%s:%.0f.alive.",queue,ID),"",alive)
+      fault <- setdiff(started,alive)
+      if(length(fault)>0) {
+        # One or more worker faults have occurred. Re-sumbit the work.
+        for(k in fault)
+        {
+          warning(sprintf("Worker fault, resubmitting task %s.",k))
+          qs <- sprintf("%s:%.0f.start.%s",queue,ID,k)
+          redisDelete(qs)
+          queueTasks <- sprintf("%s:%.0f",queue,ID) # Job tasks hash
+          redisHSet(queueTasks, k, task_list[[k]])
+          redisRPush(queue, ID)
+        }
+      }
+      # Check for imbalance in: queued + started + finished = total.
+      nq = length(setdiff(names(task_list), c(finished, started)))
+      if(queued < nq)
+      {
+        warning("Queue length off by ",nq,"...correcting")
+        replicate(nq,redisRPush(queue, ID))
+      }
+    }
+    else
+    {
+      j <- j + 1
+      finished = c(finished, names(results[[1]]))
+      tryCatch(accumulator(results[[1]], as.numeric(names(results[[1]]))),
+               error=function(e) {
+                 cat('error calling combine function:\n')
+                 print(e)
+               })
+    }
+  }
+  
+  # Clean up the session ID and session environment
+  removeJob(queue, ID)
+  
+  # check for errors
+  errorValue <- getErrorValue(it)
+  errorIndex <- getErrorIndex(it)
+  
+  # throw an error or return the combined results
+  if (identical(obj$errorHandling, 'stop') && !is.null(errorValue)) {
+    msg <- sprintf('task %d failed - "%s"', errorIndex,
+                   conditionMessage(errorValue))
+    stop(simpleError(msg, call=expr))
+  } else {
+    getResult(it)
+  }
+}
