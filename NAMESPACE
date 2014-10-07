@@ -7,7 +7,12 @@ export(
   redisWorker,
   setTaskLabel,
   setGetTask,
-  setTag
+  setTag,
+  submit,
+  print.doRedis_job,
+  retrieve,
+  retrieve.default,
+  retrieve.doRedis_job
 )
 import(foreach)
 import(rredis)
