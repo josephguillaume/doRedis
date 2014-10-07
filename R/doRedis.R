@@ -248,6 +248,16 @@ setPackages <- function(packages=c())
    redisGetResponse(all=TRUE)
    redisSetPipeline(FALSE)
 
+  if (isTRUE(obj$options$redis$async)){ 
+    obj$queue=queue
+    obj$ID=ID
+    obj$task_list=task_list
+    obj$nout=nout
+    obj$stored_it=it
+    obj$accumulator=accumulator
+    return(obj)
+  }
+
 # Collect the results and pass through the accumulator
   finished = c()
   j <- 1
