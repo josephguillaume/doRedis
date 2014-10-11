@@ -13,7 +13,8 @@ export(
   retrieve,
   retrieve.default,
   retrieve.doRedis_job,
-  retrieve.foreach
+  retrieve.foreach,
+  progress
 )
 import(foreach)
 import(rredis)
