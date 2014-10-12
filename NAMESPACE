@@ -14,7 +14,8 @@ export(
   retrieve.default,
   retrieve.doRedis_job,
   retrieve.foreach,
-  progress
+  progress,
+  checkFailed
 )
 import(foreach)
 import(rredis)
